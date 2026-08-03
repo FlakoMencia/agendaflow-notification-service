@@ -1,14 +1,20 @@
 # AgendaFlow Notification Service
 
-AgendaFlow Notification Service is the future notification-processing microservice for the AgendaFlow platform. It will eventually coordinate reminders, email delivery, retries, and delivery-state tracking.
+Quarkus microservice that will process AgendaFlow notifications in later phases. Its future scope
+includes provider selection, reminders, delivery retries and delivery-state tracking.
 
 ## Status
 
-**Phase 0 — Technical bootstrap.** The service currently exposes only technical bootstrap, OpenAPI, and health endpoints. It does not send notifications or consume events.
+**Phase 1 — Technical contract and observability.** The service provides correlation IDs, uniform
+technical errors, typed future-provider configuration, OpenAPI metadata, readable logs and health.
+It does not send notifications, consume events or use persistence.
 
-## Service boundaries
+## Service boundary
 
-Future responsibilities include notification orchestration, provider integration, retry policies, and delivery status. Core scheduling, appointments, organization management, authentication, and primary business data belong to the main AgendaFlow API, not this service.
+Future responsibilities include processing notification requests, selecting providers, retrying
+deliveries, recording outcomes and exposing observability. Users, appointments, permissions and the
+complete AgendaFlow domain belong to the main API. See
+[service boundaries](docs/architecture/service-boundaries.md).
 
 ## Stack
 
@@ -18,78 +24,90 @@ Future responsibilities include notification orchestration, provider integration
 | Maven Wrapper | 3.9.16 |
 | Quarkus | 3.33.3 LTS |
 | REST | Quarkus REST with Jackson |
+| Validation | Hibernate Validator |
+| API/health | SmallRye OpenAPI and SmallRye Health |
 | Tests | JUnit 5 through Quarkus Test and REST Assured |
 
-## Requirements
+## Requirements and commands
 
-- JDK 21
-- Internet access on the first Maven build to download dependencies
-
-No database, message broker, notification provider, or local infrastructure is required in Phase 0.
-
-## Maven Wrapper commands
+JDK 21 is required. The first build may require internet access to obtain Maven dependencies.
 
 ```cmd
 mvnw.cmd --version
+mvnw.cmd quarkus:dev
 mvnw.cmd clean test
 mvnw.cmd clean verify
 ```
 
-On Unix-like systems use `./mvnw` instead of `mvnw.cmd`.
-
-## Development mode
-
-```cmd
-mvnw.cmd quarkus:dev
-```
-
-The service listens on port `8081`. Quarkus Dev UI may expose additional development tooling, but it is not part of the public service contract.
-
-## Tests
+Development mode listens on port `8081`; tests use an automatically selected port. JVM packaging
+is written to `target\quarkus-app` and can be run with:
 
 ```cmd
-mvnw.cmd clean test
-```
-
-Tests use an automatically assigned HTTP port and validate the technical information and health endpoints.
-
-## JVM packaging
-
-```cmd
-mvnw.cmd clean package
 java -jar target\quarkus-app\quarkus-run.jar
 ```
 
-Native-image tests and packaging are intentionally outside Phase 0.
+Native packaging is outside this phase.
 
-## Technical endpoints
+## HTTP contract
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/v1/system/info` | Bootstrap service information |
+| `GET /api/v1/system/info` | Non-sensitive service status, phase and version |
 | `/q/openapi` | OpenAPI document |
 | `/q/swagger-ui` | Swagger UI in development mode |
 | `/q/health` | Aggregate health |
 | `/q/health/live` | Liveness |
 | `/q/health/ready` | Readiness |
 
-## Future environment variables
+`GET /api/v1/system/info` reports phase `technical-foundation`. No notification endpoint exists.
+Every HTTP response includes `X-Correlation-ID`; see the
+[correlation contract](docs/api/correlation-id.md). Technical failures use the documented
+[uniform error format](docs/api/error-format.md).
 
-`.env.example` documents placeholders for `NOTIFICATION_PROVIDER`, `EMAIL_FROM`, and `SPRING_API_BASE_URL`. The service does not read these variables yet, and a real `.env` file must not be committed.
+OpenAPI identifies version `0.0.1`, provides generic technical contact metadata, and defines
+`System` and `Health` tags. Only real production endpoints are included.
+
+## Typed configuration
+
+SmallRye Config Mapping exposes the following future-provider settings without initializing a
+provider:
+
+| Environment variable | Development default | Purpose |
+| --- | --- | --- |
+| `NOTIFICATION_PROVIDER` | `not-configured` | Future provider selection |
+| `EMAIL_FROM` | `no-reply@example.com` | Future sender identity |
+| `SPRING_API_BASE_URL` | `http://localhost:8080` | Future main API base URL |
+
+`.env.example` documents these non-secret placeholders. A real `.env` file must not be committed.
+The URL is parsed as a typed `URI`; no connection is opened.
+
+## Logging and health
+
+Development logs use INFO by default and add the correlation ID through MDC when a Jakarta REST
+request is active. Completed requests log only HTTP method, path and status—never bodies,
+credentials or personal data. Unexpected failures are logged with correlation context while their
+public response remains generic.
+
+Health currently reflects only Quarkus process readiness/liveness. Provider, email, PostgreSQL,
+broker and Spring API checks will be added only when those integrations actually exist.
 
 ## Package structure
 
 ```text
 com.flakomencia.agendaflow.notification
-├── api
-├── application
-├── config
-├── domain
-├── health
-└── infrastructure
+├── api             # Technical endpoint, response models and error mappers
+├── application     # Future use cases
+├── config          # Typed configuration and OpenAPI metadata
+├── domain          # Future notification domain
+├── health          # Future real integration checks
+└── infrastructure  # Correlation and HTTP infrastructure
 ```
 
-Only the technical system resource has an implementation in Phase 0. Empty package boundaries are preserved with `package-info.java` files.
+## Tests
+
+The suite verifies system information, correlation preservation/generation, response headers,
+validation/404/500 error safety, OpenAPI metadata, typed defaults and readiness. Failure-inducing
+resources exist only under `src/test` and are not packaged in production.
 
 ## Related projects
 
@@ -98,9 +116,9 @@ Only the technical system resource has an implementation in Phase 0. Empty packa
 
 ## Not implemented
 
-- Email, SMS, WhatsApp, or other delivery providers
-- Event consumers, queues, topics, polling, or schedulers
-- Retry policies and delivery-state persistence
-- PostgreSQL, ORM, Panache, JDBC, Flyway, entities, or repositories
-- JWT, login, users, or service-to-service authentication
-- Docker, cloud deployment, or CI/CD
+- `POST /notifications` or any functional notification API.
+- Email, SMS, WhatsApp or external provider integration.
+- Event consumers, brokers, polling, schedulers or real retries.
+- PostgreSQL, ORM, Panache, JDBC, Flyway, entities or repositories.
+- JWT, login, users or service-to-service calls.
+- Docker, cloud deployment or CI/CD.
