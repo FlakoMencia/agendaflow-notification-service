@@ -17,6 +17,9 @@ import jakarta.ws.rs.core.Application;
                 contact = @Contact(name = "AgendaFlow Technical Team")),
         tags = {
                 @Tag(name = "System", description = "Technical service information"),
+                @Tag(
+                        name = "Notification Contract",
+                        description = "Validation-only contract; it does not send or store notifications"),
                 @Tag(name = "Health", description = "Standard SmallRye Health endpoints")
         })
 public class OpenApiConfiguration extends Application {

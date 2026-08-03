@@ -5,16 +5,12 @@ includes provider selection, reminders, delivery retries and delivery-state trac
 
 ## Status
 
-**Phase 1 — Technical contract and observability.** The service provides correlation IDs, uniform
-technical errors, typed future-provider configuration, OpenAPI metadata, readable logs and health.
-It does not send notifications, consume events or use persistence.
+**Phase 2 — Notification request contract validation.** The service exposes a validation-only
+endpoint for candidate notification requests. It validates and normalizes the contract but does
+not send, store, enqueue or acknowledge delivery of a notification.
 
-## Service boundary
-
-Future responsibilities include processing notification requests, selecting providers, retrying
-deliveries, recording outcomes and exposing observability. Users, appointments, permissions and the
-complete AgendaFlow domain belong to the main API. See
-[service boundaries](docs/architecture/service-boundaries.md).
+The technical foundation from Phase 1 remains available: correlation IDs, uniform errors, typed
+future-provider configuration, OpenAPI, health and safe logging.
 
 ## Stack
 
@@ -23,10 +19,12 @@ complete AgendaFlow domain belong to the main API. See
 | Java | 21 |
 | Maven Wrapper | 3.9.16 |
 | Quarkus | 3.33.3 LTS |
-| REST | Quarkus REST with Jackson |
+| REST/JSON | Quarkus REST with Jackson |
 | Validation | Hibernate Validator |
 | API/health | SmallRye OpenAPI and SmallRye Health |
 | Tests | JUnit 5 through Quarkus Test and REST Assured |
+
+No persistence, messaging or provider extension is installed.
 
 ## Requirements and commands
 
@@ -40,74 +38,61 @@ mvnw.cmd clean verify
 ```
 
 Development mode listens on port `8081`; tests use an automatically selected port. JVM packaging
-is written to `target\quarkus-app` and can be run with:
-
-```cmd
-java -jar target\quarkus-app\quarkus-run.jar
-```
-
-Native packaging is outside this phase.
+is written to `target\quarkus-app`.
 
 ## HTTP contract
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/v1/system/info` | Non-sensitive service status, phase and version |
+| `POST /api/v1/notification-requests/validate` | Validate and normalize a candidate contract only |
+| `GET /api/v1/system/info` | Non-sensitive service information |
 | `/q/openapi` | OpenAPI document |
 | `/q/swagger-ui` | Swagger UI in development mode |
-| `/q/health` | Aggregate health |
-| `/q/health/live` | Liveness |
-| `/q/health/ready` | Readiness |
+| `/q/health`, `/q/health/live`, `/q/health/ready` | Standard process health |
 
-`GET /api/v1/system/info` reports phase `technical-foundation`. No notification endpoint exists.
-Every HTTP response includes `X-Correlation-ID`; see the
-[correlation contract](docs/api/correlation-id.md). Technical failures use the documented
-[uniform error format](docs/api/error-format.md).
+The service intentionally does **not** expose `POST /api/v1/notification-requests`. A successful
+validation returns `200 OK`, never `202 Accepted`, and contains no request, delivery or provider
+identifier. See the complete [notification request contract](docs/api/notification-request-contract.md).
 
-OpenAPI identifies version `0.0.1`, provides generic technical contact metadata, and defines
-`System` and `Health` tags. Only real production endpoints are included.
+Every response includes `X-Correlation-ID`. Validation errors preserve that value in both the
+header and the [uniform error body](docs/api/error-format.md).
 
-## Typed configuration
+## Contract boundaries
 
-SmallRye Config Mapping exposes the following future-provider settings without initializing a
-provider:
+The input accepts an organization ID, optional appointment ID, `EMAIL` channel, controlled template
+code, email recipient, optional locale and future UTC schedule, plus a bounded flat map of string
+variables. Unknown fields, nested objects, credentials, secrets and complete HTML documents are
+rejected.
 
-| Environment variable | Development default | Purpose |
-| --- | --- | --- |
-| `NOTIFICATION_PROVIDER` | `not-configured` | Future provider selection |
-| `EMAIL_FROM` | `no-reply@example.com` | Future sender identity |
-| `SPRING_API_BASE_URL` | `http://localhost:8080` | Future main API base URL |
-
-`.env.example` documents these non-secret placeholders. A real `.env` file must not be committed.
-The URL is parsed as a typed `URI`; no connection is opened.
+Email normalization trims the value and lowercases only the domain, preserving the local part.
+Locale syntax is validated and normalized without external lookup. The service performs no DNS or
+mailbox verification and makes no request to the Spring Boot API.
 
 ## Logging and health
 
-Development logs use INFO by default and add the correlation ID through MDC when a Jakarta REST
-request is active. Completed requests log only HTTP method, path and status—never bodies,
-credentials or personal data. Unexpected failures are logged with correlation context while their
-public response remains generic.
+Successful validation logs only correlation ID, organization ID, channel, template code and
+`VALID`. Recipient email, variables, template content and personal data are not logged. Completed
+HTTP requests continue to log method, path and status through the existing correlation filter.
 
-Health currently reflects only Quarkus process readiness/liveness. Provider, email, PostgreSQL,
-broker and Spring API checks will be added only when those integrations actually exist.
+Health reflects only Quarkus process readiness/liveness. There are no fake provider, PostgreSQL,
+broker, email or Spring API checks.
 
 ## Package structure
 
 ```text
 com.flakomencia.agendaflow.notification
-├── api             # Technical endpoint, response models and error mappers
-├── application     # Future use cases
+├── api             # Technical and contract-validation resources, models and error mappers
+├── application     # Pure contract validation and normalization
 ├── config          # Typed configuration and OpenAPI metadata
-├── domain          # Future notification domain
-├── health          # Future real integration checks
+├── domain          # NotificationChannel (EMAIL only)
+├── health          # Reserved for future real integration checks
 └── infrastructure  # Correlation and HTTP infrastructure
 ```
 
-## Tests
+## Typed future configuration
 
-The suite verifies system information, correlation preservation/generation, response headers,
-validation/404/500 error safety, OpenAPI metadata, typed defaults and readiness. Failure-inducing
-resources exist only under `src/test` and are not packaged in production.
+`NOTIFICATION_PROVIDER`, `EMAIL_FROM` and `SPRING_API_BASE_URL` remain documented placeholders.
+They do not initialize a provider, sender or service-to-service client.
 
 ## Related projects
 
@@ -116,9 +101,12 @@ resources exist only under `src/test` and are not packaged in production.
 
 ## Not implemented
 
-- `POST /notifications` or any functional notification API.
-- Email, SMS, WhatsApp or external provider integration.
-- Event consumers, brokers, polling, schedulers or real retries.
-- PostgreSQL, ORM, Panache, JDBC, Flyway, entities or repositories.
-- JWT, login, users or service-to-service calls.
+- Real notification intake or `202 Accepted` processing.
+- Email delivery, provider SDKs, templates, attachments or delivery state.
+- Event consumers, Kafka, RabbitMQ, Azure Service Bus, polling, schedulers or retries.
+- PostgreSQL, JDBC, ORM, Panache, Flyway, entities or repositories.
+- Spring Boot communication, JWT, Basic Auth or service authorization.
 - Docker, cloud deployment or CI/CD.
+
+The validation endpoint may remain open during development. It must be protected or removed when a
+real intake mechanism is introduced.
