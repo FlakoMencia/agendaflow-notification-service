@@ -1,8 +1,10 @@
 # Architecture documentation
 
-This folder describes the microservice boundary, its internal technical foundation, and future
-integration decisions. See [service boundaries](service-boundaries.md) for ownership rules.
+Esta carpeta describe los límites del microservicio, su base técnica y futuras decisiones de
+integración.
 
-Phase 2 adds a pure notification-request contract validator to the cross-cutting HTTP foundation.
-It defines request shape and validation boundaries but no intake transport, provider, persistence or
-messaging architecture.
+- [Service boundaries](service-boundaries.md)
+- [Service-to-service authentication](service-authentication.md)
+
+La Fase 3 protege el validador de contratos mediante JWT HS256 y RBAC. No introduce intake real,
+proveedores, persistencia, mensajería ni comunicación saliente.

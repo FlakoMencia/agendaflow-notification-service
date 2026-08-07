@@ -18,7 +18,10 @@ import com.flakomencia.agendaflow.notification.api.model.NotificationRequestVali
 import com.flakomencia.agendaflow.notification.application.NotificationContractValidationService;
 import com.flakomencia.agendaflow.notification.infrastructure.http.CorrelationIdContext;
 import com.flakomencia.agendaflow.notification.infrastructure.http.CorrelationIdFilter;
+import com.flakomencia.agendaflow.notification.infrastructure.security.ServiceTokenClaimsFilter;
+import com.flakomencia.agendaflow.notification.infrastructure.security.ServiceTokenRequired;
 
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -26,6 +29,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
 @Path("/api/v1/notification-requests")
 @Consumes(APPLICATION_JSON)
@@ -41,6 +45,9 @@ public class NotificationContractResource {
 
     @POST
     @Path("/validate")
+    @ServiceTokenRequired
+    @RolesAllowed(ServiceTokenClaimsFilter.REQUIRED_PERMISSION)
+    @SecurityRequirement(name = "serviceBearer")
     @Operation(
             summary = "Validate a notification request contract",
             description = "Validates and safely normalizes a candidate request. "
@@ -73,6 +80,18 @@ public class NotificationContractResource {
             @APIResponse(
                     responseCode = "400",
                     description = "Malformed or invalid notification request contract",
+                    content = @Content(
+                            mediaType = APPLICATION_JSON,
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
+            @APIResponse(
+                    responseCode = "401",
+                    description = "Missing, invalid, expired, or incorrectly signed service token",
+                    content = @Content(
+                            mediaType = APPLICATION_JSON,
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
+            @APIResponse(
+                    responseCode = "403",
+                    description = "Token is not a service token or lacks notification:validate",
                     content = @Content(
                             mediaType = APPLICATION_JSON,
                             schema = @Schema(implementation = ApiErrorResponse.class)))

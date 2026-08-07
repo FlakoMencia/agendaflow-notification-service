@@ -44,6 +44,9 @@ public class CorrelationIdFilter implements ContainerRequestFilter, ContainerRes
             throws IOException {
         String correlationId = correlationIdContext.get();
         if (correlationId == null) {
+            correlationId = requestContext.getHeaderString(HEADER_NAME);
+        }
+        if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
 

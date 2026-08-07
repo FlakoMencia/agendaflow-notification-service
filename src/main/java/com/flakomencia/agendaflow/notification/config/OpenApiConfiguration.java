@@ -4,6 +4,8 @@ import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
 import org.eclipse.microprofile.openapi.annotations.info.Contact;
 import org.eclipse.microprofile.openapi.annotations.info.Info;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
 
 import jakarta.ws.rs.ApplicationPath;
 import jakarta.ws.rs.core.Application;
@@ -22,5 +24,11 @@ import jakarta.ws.rs.core.Application;
                         description = "Validation-only contract; it does not send or store notifications"),
                 @Tag(name = "Health", description = "Standard SmallRye Health endpoints")
         })
+@SecurityScheme(
+        securitySchemeName = "serviceBearer",
+        type = SecuritySchemeType.HTTP,
+        scheme = "bearer",
+        bearerFormat = "JWT",
+        description = "Short-lived AgendaFlow service token. Requires token_use=service and notification:validate; user tokens are rejected.")
 public class OpenApiConfiguration extends Application {
 }

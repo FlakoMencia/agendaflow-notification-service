@@ -34,7 +34,7 @@ class NotificationContractResourceTest {
         request.remove("scheduledAt");
         request.put("recipient", "Customer@EXAMPLE.COM");
 
-        given()
+        authorized()
                 .contentType(ContentType.JSON)
                 .body(request)
                 .when().post(PATH)
@@ -52,7 +52,7 @@ class NotificationContractResourceTest {
         Map<String, Object> request = validRequest();
         request.put("scheduledAt", Instant.now().plus(1, ChronoUnit.DAYS).toString());
 
-        given()
+        authorized()
                 .contentType(ContentType.JSON)
                 .body(request)
                 .when().post(PATH)
@@ -66,7 +66,7 @@ class NotificationContractResourceTest {
     void preservesReceivedCorrelationIdInHeaderAndBody() {
         String correlationId = "notification-contract-correlation";
 
-        given()
+        authorized()
                 .contentType(ContentType.JSON)
                 .header(CorrelationIdFilter.HEADER_NAME, correlationId)
                 .body(validRequest())
@@ -79,7 +79,7 @@ class NotificationContractResourceTest {
 
     @Test
     void generatesCorrelationIdAndReturnsTheSameValueInBody() {
-        Response response = given()
+        Response response = authorized()
                 .contentType(ContentType.JSON)
                 .body(validRequest())
                 .when().post(PATH);
@@ -178,7 +178,7 @@ class NotificationContractResourceTest {
 
     @Test
     void rejectsMalformedJson() {
-        given()
+        authorized()
                 .contentType(ContentType.JSON)
                 .body("{\"organizationId\":10,")
                 .when().post(PATH)
@@ -201,7 +201,7 @@ class NotificationContractResourceTest {
 
     @Test
     void responseContainsNoFalseDeliveryIdentifiersOrStatuses() {
-        given()
+        authorized()
                 .contentType(ContentType.JSON)
                 .body(validRequest())
                 .when().post(PATH)
@@ -215,7 +215,7 @@ class NotificationContractResourceTest {
 
     @Test
     void documentsOnlyTheValidationEndpointAsNotificationContract() {
-        given()
+        authorized()
                 .queryParam("format", "json")
                 .when().get("/q/openapi")
                 .then()
@@ -227,13 +227,17 @@ class NotificationContractResourceTest {
     }
 
     private io.restassured.response.ValidatableResponse givenInvalid(Map<String, Object> request) {
-        return given()
+        return authorized()
                 .contentType(ContentType.JSON)
                 .body(request)
                 .when().post(PATH)
                 .then()
                 .statusCode(400)
                 .body("correlationId", not(blankOrNullString()));
+    }
+
+    private io.restassured.specification.RequestSpecification authorized() {
+        return given().auth().oauth2(ServiceJwtTestTokens.valid());
     }
 
     private Map<String, Object> validRequest() {

@@ -8,10 +8,11 @@ import com.flakomencia.agendaflow.notification.infrastructure.http.CorrelationId
 
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.UriInfo;
 
 @RequestScoped
-class ApiErrorFactory {
+public class ApiErrorFactory {
 
     @Inject
     CorrelationIdContext correlationIdContext;
@@ -19,18 +20,25 @@ class ApiErrorFactory {
     @Inject
     UriInfo uriInfo;
 
-    ApiErrorResponse create(int status, String code, String message) {
+    @Inject
+    HttpHeaders httpHeaders;
+
+    public ApiErrorResponse create(int status, String code, String message) {
         return create(status, code, message, Map.of());
     }
 
-    ApiErrorResponse create(int status, String code, String message, Map<String, String> fieldErrors) {
+    public ApiErrorResponse create(int status, String code, String message, Map<String, String> fieldErrors) {
+        String correlationId = correlationIdContext.get();
+        if (correlationId == null) {
+            correlationId = httpHeaders.getHeaderString("X-Correlation-ID");
+        }
         return new ApiErrorResponse(
                 Instant.now(),
                 status,
                 code,
                 message,
                 uriInfo.getRequestUri().getRawPath(),
-                correlationIdContext.get(),
+                correlationId,
                 fieldErrors);
     }
 }

@@ -21,7 +21,11 @@ public class CorrelationIdRouteFilter {
                 : receivedCorrelationId;
 
         routingContext.request().headers().set(CorrelationIdFilter.HEADER_NAME, correlationId);
-        routingContext.response().headers().set(CorrelationIdFilter.HEADER_NAME, correlationId);
+        routingContext.addHeadersEndHandler(ignored -> {
+            if (!routingContext.response().headers().contains(CorrelationIdFilter.HEADER_NAME)) {
+                routingContext.response().headers().set(CorrelationIdFilter.HEADER_NAME, correlationId);
+            }
+        });
         routingContext.next();
     }
 }
