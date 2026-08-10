@@ -2,7 +2,6 @@ package com.flakomencia.agendaflow.notification.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Modifier;
 import java.time.Instant;
@@ -11,49 +10,62 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationRequest;
-import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationResponse;
 import com.flakomencia.agendaflow.notification.domain.NotificationChannel;
+import com.flakomencia.agendaflow.notification.domain.NotificationRecipient;
+import com.flakomencia.agendaflow.notification.domain.NotificationRequest;
+import com.flakomencia.agendaflow.notification.domain.NotificationTemplateCode;
+import com.flakomencia.agendaflow.notification.domain.NotificationVariables;
 
 class NotificationContractValidationServiceTest {
 
     private final NotificationContractValidationService service = new NotificationContractValidationService();
 
     @Test
-    void normalizesOnlyTheEmailDomainSafely() {
-        NotificationRequestValidationResponse response = service.validate(
-                request("Customer@EXAMPLE.COM", "en-us", null, Map.of()),
-                "unit-correlation");
+    void returnsTheValidatedInternalRequest() {
+        NotificationRequest request = request(Map.of());
 
-        assertEquals("Customer@example.com", response.normalizedRecipient());
-        assertEquals("unit-correlation", response.correlationId());
-        assertTrue(response.valid());
+        ValidatedNotificationRequest validated = service.validate(request, "unit-correlation");
+
+        assertEquals(request, validated.request());
     }
 
     @Test
     void rejectsSensitiveVariables() {
         NotificationContractValidationException exception = assertThrows(
                 NotificationContractValidationException.class,
-                () -> service.validate(
-                        request("customer@example.com", "en-US", null, Map.of("apiKey", "secret-value")),
-                        "unit-correlation"));
+                () -> service.validate(request(Map.of("apiKey", "secret-value")), "unit-correlation"));
 
         assertEquals("SECRET_VARIABLE_NOT_ALLOWED", exception.code());
     }
 
     @Test
-    void rejectsCompleteHtmlDocuments() {
+    void rejectsCompleteHtmlDocumentsInVariableValues() {
         NotificationContractValidationException exception = assertThrows(
                 NotificationContractValidationException.class,
                 () -> service.validate(
-                        request(
-                                "customer@example.com",
-                                "en-US",
-                                null,
-                                Map.of("content", "<!doctype html><html><body>content</body></html>")),
+                        request(Map.of("content", "<!doctype html><html><body>content</body></html>")),
                         "unit-correlation"));
 
         assertEquals("HTML_DOCUMENT_NOT_ALLOWED", exception.code());
+    }
+
+    @Test
+    void rejectsPastSchedules() {
+        NotificationRequest request = new NotificationRequest(
+                10L,
+                25L,
+                NotificationChannel.EMAIL,
+                new NotificationTemplateCode("APPOINTMENT_CONFIRMATION"),
+                new NotificationRecipient("customer@example.com"),
+                "en-US",
+                Instant.now().minusSeconds(60),
+                NotificationVariables.empty());
+
+        NotificationContractValidationException exception = assertThrows(
+                NotificationContractValidationException.class,
+                () -> service.validate(request, "unit-correlation"));
+
+        assertEquals("SCHEDULED_AT_IN_PAST", exception.code());
     }
 
     @Test
@@ -65,19 +77,15 @@ class NotificationContractValidationServiceTest {
         assertEquals(0, instanceFields);
     }
 
-    private NotificationRequestValidationRequest request(
-            String recipient,
-            String locale,
-            Instant scheduledAt,
-            Map<String, String> variables) {
-        return new NotificationRequestValidationRequest(
+    private NotificationRequest request(Map<String, String> variables) {
+        return new NotificationRequest(
                 10L,
                 25L,
                 NotificationChannel.EMAIL,
-                "APPOINTMENT_CONFIRMATION",
-                recipient,
-                locale,
-                scheduledAt,
-                variables);
+                new NotificationTemplateCode("APPOINTMENT_CONFIRMATION"),
+                new NotificationRecipient("customer@example.com"),
+                "en-US",
+                null,
+                new NotificationVariables(variables));
     }
 }

@@ -77,3 +77,13 @@ Invalid requests return `400 Bad Request` using the uniform error contract. Rele
 The endpoint can remain available during development. It must be protected or retired once a real
 intake contract is selected. The future intake transport and integration with `agendaflow-api`
 remain undecided; this document does not select Kafka, RabbitMQ or Azure Service Bus.
+
+## Phase 4 internal mapping
+
+After Jakarta Bean Validation, `NotificationRequestMapper` converts the DTO into the immutable
+internal `NotificationRequest`. Recipient domain and locale normalization happen at that boundary;
+the contract validation service then applies scheduling and defensive variable rules to the domain
+model. The response shape above is unchanged.
+
+The internal template renderer is deliberately not exposed here. This endpoint is not a preview,
+does not accept template text and never returns rendered content.

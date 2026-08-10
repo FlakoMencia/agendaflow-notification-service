@@ -16,6 +16,7 @@ import com.flakomencia.agendaflow.notification.api.model.ApiErrorResponse;
 import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationRequest;
 import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationResponse;
 import com.flakomencia.agendaflow.notification.application.NotificationContractValidationService;
+import com.flakomencia.agendaflow.notification.application.NotificationRequestMapper;
 import com.flakomencia.agendaflow.notification.infrastructure.http.CorrelationIdContext;
 import com.flakomencia.agendaflow.notification.infrastructure.http.CorrelationIdFilter;
 import com.flakomencia.agendaflow.notification.infrastructure.security.ServiceTokenClaimsFilter;
@@ -39,6 +40,9 @@ public class NotificationContractResource {
 
     @Inject
     NotificationContractValidationService validationService;
+
+    @Inject
+    NotificationRequestMapper requestMapper;
 
     @Inject
     CorrelationIdContext correlationIdContext;
@@ -99,6 +103,9 @@ public class NotificationContractResource {
     public NotificationRequestValidationResponse validate(
             @NotNull(message = "request body is required")
             @Valid NotificationRequestValidationRequest request) {
-        return validationService.validate(request, correlationIdContext.get());
+        var validatedRequest = validationService.validate(
+                requestMapper.toDomain(request),
+                correlationIdContext.get());
+        return requestMapper.toResponse(validatedRequest, correlationIdContext.get());
     }
 }

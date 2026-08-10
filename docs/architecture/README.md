@@ -5,6 +5,8 @@ integración.
 
 - [Service boundaries](service-boundaries.md)
 - [Service-to-service authentication](service-authentication.md)
+- [Notification preparation pipeline](notification-pipeline.md)
 
-La Fase 3 protege el validador de contratos mediante JWT HS256 y RBAC. No introduce intake real,
-proveedores, persistencia, mensajería ni comunicación saliente.
+La Fase 4 agrega modelo interno, mapping, rendering de texto plano y un delivery port sin
+implementación. Conserva JWT HS256 y RBAC, y no introduce intake real, proveedores, persistencia,
+mensajería ni comunicación saliente.

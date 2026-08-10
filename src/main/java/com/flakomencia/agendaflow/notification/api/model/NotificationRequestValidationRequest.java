@@ -8,6 +8,7 @@ import java.util.Map;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 
 import com.flakomencia.agendaflow.notification.domain.NotificationChannel;
+import com.flakomencia.agendaflow.notification.domain.NotificationLimits;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -57,17 +58,21 @@ public record NotificationRequestValidationRequest(
         @Schema(description = "Optional UTC scheduling instant", examples = "2026-08-04T15:00:00Z")
         Instant scheduledAt,
 
-        @Size(max = 20, message = "variables must contain at most 20 entries")
+        @Size(max = NotificationLimits.MAX_VARIABLES, message = "variables must contain at most 20 entries")
         @Schema(description = "Optional flat string variables; nested objects are not accepted")
         Map<
                 @NotBlank(message = "variable keys must not be blank")
-                @Size(max = 64, message = "variable keys must contain at most 64 characters")
+                @Size(
+                        max = NotificationLimits.MAX_VARIABLE_KEY_LENGTH,
+                        message = "variable keys must contain at most 64 characters")
                 @Pattern(
                         regexp = "^[A-Za-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$",
                         message = "variable keys have an invalid format")
                 String,
                 @NotNull(message = "variable values must not be null")
-                @Size(max = 500, message = "variable values must contain at most 500 characters")
+                @Size(
+                        max = NotificationLimits.MAX_VARIABLE_VALUE_LENGTH,
+                        message = "variable values must contain at most 500 characters")
                 String> variables) {
 
     public NotificationRequestValidationRequest {

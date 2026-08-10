@@ -1,36 +1,38 @@
 # Service boundaries
 
-AgendaFlow Notification Service will own notification processing while keeping AgendaFlow's core
-business domain in the main Spring Boot API.
+AgendaFlow Notification Service will own notification processing while the main Spring Boot API
+continues to own organizations, appointments, customers, users and authorization.
 
-## Current Phase 2 responsibility
+## Current Phase 4 responsibility
 
-The service validates a candidate notification request contract at
-`POST /api/v1/notification-requests/validate`. Validation is a pure in-process operation: it applies
-Bean Validation, safe normalization and defensive contract rules, then returns a validation result.
+The service validates a candidate request at
+`POST /api/v1/notification-requests/validate`. This is the route already published and tested in
+Phases 2 and 3; it remains unchanged for compatibility. Validation is in-process and returns the
+same `200 OK` contract without rendering, sending, storing, enqueueing or acknowledging anything.
 
-It does not create a notification, delivery attempt or scheduled job. The application validation
-service has no repository, broker, provider, sender or external API collaborator.
+Phase 4 also provides internal-only building blocks:
+
+- immutable provider-neutral notification models;
+- mapping from the existing HTTP DTO to that model;
+- a deliberately limited plain-text renderer;
+- a preparation service that creates `RenderedNotification`;
+- a delivery port with no production implementation.
 
 ## Future responsibilities
 
-- Receive notification requests through a contract and transport that have not yet been selected.
-- Select and integrate notification providers.
-- Apply retry and scheduling policies.
-- Record delivery attempts and outcomes.
-- Expose real integration health and operational observability.
+- Select a real authenticated intake contract and transport.
+- Select a template source and governance model.
+- Implement a provider adapter behind the delivery port.
+- Define retry, scheduling and delivery-observation policies.
+- Persist only the delivery state justified by those decisions.
 
 ## Explicitly outside this service
 
-- User, role and permission administration.
-- Appointment, scheduling, customer or organization management.
-- Storage of the complete AgendaFlow business domain.
-- Sharing JPA entities or persistence models with the Spring Boot API.
-- Validating that organizations, appointments or email mailboxes exist during contract validation.
+- Managing appointments, customers, organizations, users, roles or permissions.
+- Sharing JPA entities or persistence models with `agendaflow-api`.
+- Validating that an organization, appointment or mailbox exists during contract validation.
+- Sending email, SMS or WhatsApp in Phase 4.
+- Selecting Kafka, RabbitMQ, Azure Service Bus, SMTP or a cloud provider prematurely.
 
-There is no communication with `agendaflow-api` in Phase 2. `organizationId` and `appointmentId`
-are syntactically validated only. Kafka, RabbitMQ, Azure Service Bus and other transports remain
-future architectural decisions; none is preferred or implied.
-
-The validation endpoint may be publicly available in development. It must be protected or removed
-when the real intake mechanism and service-to-service authorization are defined.
+There is no outbound communication with `agendaflow-api`, provider credential, database,
+repository, broker, scheduler, consumer or retry worker in Phase 4.

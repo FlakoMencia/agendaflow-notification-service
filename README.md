@@ -1,15 +1,19 @@
 # AgendaFlow Notification Service
 
 Microservicio Quarkus que procesará notificaciones de AgendaFlow en fases posteriores. Actualmente
-valida contratos de solicitud y protege esa operación mediante autenticación servicio-a-servicio.
+valida contratos protegidos por autenticación servicio-a-servicio y dispone de preparación y
+rendering de texto plano exclusivamente internos.
 
 ## Estado
 
-**Fase 3 — Autenticación servicio-a-servicio.** `POST /api/v1/notification-requests/validate`
+**Fase 4 — Modelo de notificación y preparación de entrega.**
+`POST /api/v1/notification-requests/validate`
 requiere un JWT HS256 emitido por `agendaflow-api`, dirigido a este servicio y autorizado con el
 grupo `notification:validate`.
 
-La validación no envía, almacena, encola ni confirma la entrega de notificaciones.
+La validación conserva su contrato externo. Internamente existen records inmutables, mapping desde
+el DTO, un renderer determinista y `NotificationDeliveryPort`, pero no hay implementación del port.
+Nada envía, almacena, encola ni confirma la entrega de notificaciones.
 
 ## Stack
 
@@ -25,6 +29,30 @@ La validación no envía, almacena, encola ni confirma la entrega de notificacio
 | Pruebas | Quarkus Test, JUnit 5 y REST Assured |
 
 No hay extensiones de persistencia, mensajería, scheduler o proveedores de correo.
+
+## Arquitectura de preparación
+
+```text
+HTTP DTO validado
+    ↓
+NotificationRequestMapper
+    ↓
+NotificationRequest
+    ↓
+NotificationContractValidationService
+    ↓
+ValidatedNotificationRequest
+    ↓ (solo uso interno con template provisto)
+NotificationPreparationService → PlainTextTemplateRenderer → RenderedNotification
+```
+
+El renderer reconoce únicamente `{{variableName}}`. Falla ante variables faltantes, sintaxis
+inválida, templates vacíos o mayores a 10.000 caracteres y resultados mayores a 20.000 caracteres.
+Las variables adicionales se permiten; se ignoran si el template no las usa. Es de una sola pasada,
+por lo que no ejecuta expresiones ni vuelve a interpretar placeholders presentes en valores.
+
+HTML y Markdown no se interpretan: son texto plano. No se usan Qute, Thymeleaf, Freemarker,
+Handlebars, Mustache, reflection, SpEL, JavaScript, archivos ni variables de entorno.
 
 ## Requisitos y comandos
 
@@ -78,6 +106,9 @@ Una validación correcta devuelve `200 OK`, nunca `202 Accepted`, y no incluye i
 request, entrega o proveedor. El contrato completo está en
 [notification-request-contract.md](docs/api/notification-request-contract.md).
 
+La ruta es la publicada por el repositorio desde Fase 2. No existe `/preview`,
+`POST /api/v1/notifications` ni un alias que sugiera intake o envío real.
+
 ## Errores, correlación y logs
 
 Los fallos de autenticación devuelven 401 `AUTHENTICATION_REQUIRED`. Los tokens autenticados que no
@@ -96,12 +127,14 @@ evitar la autogeneración RSA de Quarkus. Cada test genera un JWT efímero duran
 `smallrye-jwt-build`; no existe un token estático de larga duración en el repositorio.
 
 La suite cubre firma, expiración, issuer, audience, subject, `token_use`, grupo RBAC, 401/403,
-correlation ID, OpenAPI, rutas públicas y el contrato funcional heredado.
+correlation ID, OpenAPI, rutas públicas, contrato funcional heredado, mapping, inmutabilidad,
+preparación, límites y rendering seguro.
 
 ## Documentación
 
 - [Autenticación servicio-a-servicio](docs/architecture/service-authentication.md)
 - [Límites del servicio](docs/architecture/service-boundaries.md)
+- [Pipeline de preparación](docs/architecture/notification-pipeline.md)
 - [Contrato de validación](docs/api/notification-request-contract.md)
 - [Formato uniforme de errores](docs/api/error-format.md)
 - [Correlation ID](docs/api/correlation-id.md)
@@ -118,7 +151,7 @@ documentales. No inicializan proveedor, sender ni cliente HTTP hacia Spring Boot
 
 ## No implementado
 
-- Intake real, envío de email, plantillas, attachments o estado de entrega.
+- Intake real, lookup/almacenamiento de templates, envío de email, attachments o estado de entrega.
 - Kafka, RabbitMQ, Azure Service Bus, consumers, polling, schedulers o retries.
 - PostgreSQL, JDBC, Hibernate, Panache, Flyway, entidades o repositorios.
 - Llamadas a Spring Boot, login, usuarios, refresh token o emisión HTTP de tokens.
