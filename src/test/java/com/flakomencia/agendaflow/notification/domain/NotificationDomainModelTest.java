@@ -17,6 +17,8 @@ class NotificationDomainModelTest {
         assertTrue(NotificationTemplateCode.class.isRecord());
         assertTrue(NotificationVariables.class.isRecord());
         assertTrue(RenderedNotification.class.isRecord());
+        assertTrue(NotificationTemplate.class.isRecord());
+        assertTrue(AppointmentNotificationEvent.class.isRecord());
         assertEquals(0, NotificationRequest.class.getAnnotations().length);
         assertEquals(0, RenderedNotification.class.getAnnotations().length);
     }

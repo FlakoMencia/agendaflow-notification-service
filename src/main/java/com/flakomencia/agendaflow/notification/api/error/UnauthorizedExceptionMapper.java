@@ -11,6 +11,7 @@ import io.quarkus.security.UnauthorizedException;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
@@ -24,12 +25,15 @@ public class UnauthorizedExceptionMapper implements ExceptionMapper<Unauthorized
     @Inject
     HttpHeaders httpHeaders;
 
+    @Inject
+    UriInfo uriInfo;
+
     @Override
     public Response toResponse(UnauthorizedException exception) {
         LOG.warnf(
                 "Service JWT authentication correlationId=%s subject=unavailable issuer=unavailable result=missing permission=%s",
                 httpHeaders.getHeaderString(CorrelationIdFilter.HEADER_NAME),
-                ServiceTokenClaimsFilter.REQUIRED_PERMISSION);
+                ServiceTokenClaimsFilter.permissionForPath(uriInfo.getPath()));
         return Response.status(Response.Status.UNAUTHORIZED)
                 .type(APPLICATION_JSON_TYPE)
                 .entity(errorFactory.create(

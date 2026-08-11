@@ -1,2 +1,2 @@
-/** Notification domain concepts will be defined here in later phases. */
+/** Immutable, provider-neutral notification concepts with no HTTP dependencies. */
 package com.flakomencia.agendaflow.notification.domain;

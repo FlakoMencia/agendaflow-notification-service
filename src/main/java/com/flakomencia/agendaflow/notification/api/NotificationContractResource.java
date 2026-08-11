@@ -15,6 +15,10 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import com.flakomencia.agendaflow.notification.api.model.ApiErrorResponse;
 import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationRequest;
 import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationResponse;
+import com.flakomencia.agendaflow.notification.api.model.AppointmentNotificationRequest;
+import com.flakomencia.agendaflow.notification.api.model.NotificationIntakeResponse;
+import com.flakomencia.agendaflow.notification.application.AppointmentNotificationMessage;
+import com.flakomencia.agendaflow.notification.application.DurableNotificationIntakeService;
 import com.flakomencia.agendaflow.notification.application.NotificationContractValidationService;
 import com.flakomencia.agendaflow.notification.application.NotificationRequestMapper;
 import com.flakomencia.agendaflow.notification.infrastructure.http.CorrelationIdContext;
@@ -47,14 +51,45 @@ public class NotificationContractResource {
     @Inject
     CorrelationIdContext correlationIdContext;
 
+    @Inject
+    DurableNotificationIntakeService intakeService;
+
+    @POST
+    @ServiceTokenRequired
+    @RolesAllowed(ServiceTokenClaimsFilter.SUBMIT_PERMISSION)
+    @SecurityRequirement(name = "serviceBearer")
+    @Operation(
+            summary = "Durably accept an appointment notification event",
+            description = "Persists the event before returning 202. Duplicate eventId values are accepted idempotently "
+                    + "without creating another inbox row or delivery attempt. Mail is processed asynchronously.")
+    @APIResponses({
+            @APIResponse(responseCode = "202", description = "Event durably accepted, including an already accepted duplicate",
+                    content = @Content(mediaType = APPLICATION_JSON,
+                            schema = @Schema(implementation = NotificationIntakeResponse.class))),
+            @APIResponse(responseCode = "400", description = "Malformed or invalid event",
+                    content = @Content(mediaType = APPLICATION_JSON,
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
+            @APIResponse(responseCode = "401", description = "Missing or invalid service JWT"),
+            @APIResponse(responseCode = "403", description = "Token is not a service token or lacks notification:submit")
+    })
+    public jakarta.ws.rs.core.Response accept(@NotNull @Valid AppointmentNotificationRequest request) {
+        var message = new AppointmentNotificationMessage(request.eventId(), request.organizationId(),
+                request.appointmentId(), request.type(), request.recipient(), request.locale(), request.occurredAt(),
+                request.variables());
+        var result = intakeService.accept(message, correlationIdContext.get());
+        return jakarta.ws.rs.core.Response.accepted(
+                NotificationIntakeResponse.accepted(result.eventId(), result.duplicate())).build();
+    }
+
     @POST
     @Path("/validate")
     @ServiceTokenRequired
-    @RolesAllowed(ServiceTokenClaimsFilter.REQUIRED_PERMISSION)
+    @RolesAllowed(ServiceTokenClaimsFilter.VALIDATE_PERMISSION)
     @SecurityRequirement(name = "serviceBearer")
     @Operation(
             summary = "Validate a notification request contract",
             description = "Validates and safely normalizes a candidate request. "
+                    + "This is contract validation, not internal appointment preparation or future durable intake. "
                     + "It does not send, store, enqueue or acknowledge delivery of a notification.")
     @RequestBody(
             required = true,

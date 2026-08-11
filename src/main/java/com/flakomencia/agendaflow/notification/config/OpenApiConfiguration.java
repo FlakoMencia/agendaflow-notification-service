@@ -29,6 +29,6 @@ import jakarta.ws.rs.core.Application;
         type = SecuritySchemeType.HTTP,
         scheme = "bearer",
         bearerFormat = "JWT",
-        description = "Short-lived AgendaFlow service token. Requires token_use=service and notification:validate; user tokens are rejected.")
+        description = "Short-lived AgendaFlow service token with token_use=service. Endpoints require either notification:validate or notification:submit; user tokens are rejected.")
 public class OpenApiConfiguration extends Application {
 }
