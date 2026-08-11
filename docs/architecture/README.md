@@ -1,12 +1,13 @@
 # Architecture documentation
 
-Esta carpeta describe los límites del microservicio, su base técnica y futuras decisiones de
-integración.
+This folder records service boundaries and technical design decisions.
 
 - [Service boundaries](service-boundaries.md)
+- [Durable intake](durable-intake.md)
+- [Inbox and idempotency](inbox-and-idempotency.md)
+- [Notification pipeline](notification-pipeline.md)
 - [Service-to-service authentication](service-authentication.md)
-- [Notification preparation pipeline](notification-pipeline.md)
+- [Appointment notifications](appointment-notifications.md)
 
-La Fase 4 agrega modelo interno, mapping, rendering de texto plano y un delivery port sin
-implementación. Conserva JWT HS256 y RBAC, y no introduce intake real, proveedores, persistencia,
-mensajería ni comunicación saliente.
+Phase 6 introduces the service-owned PostgreSQL Inbox, bounded asynchronous processing and a
+Quarkus Mailer adapter. No broker or external SaaS mail provider is integrated.

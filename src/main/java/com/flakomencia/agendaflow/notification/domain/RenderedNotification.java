@@ -11,6 +11,7 @@ public record RenderedNotification(
         NotificationRecipient recipient,
         String locale,
         Instant scheduledAt,
+        String subject,
         String content) {
 
     public RenderedNotification {
@@ -24,5 +25,17 @@ public record RenderedNotification(
         if (content.length() > NotificationLimits.MAX_RENDERED_CONTENT_LENGTH) {
             throw new IllegalArgumentException("content exceeds the rendered notification limit");
         }
+    }
+
+    public RenderedNotification(
+            Long organizationId,
+            Long appointmentId,
+            NotificationChannel channel,
+            NotificationTemplateCode templateCode,
+            NotificationRecipient recipient,
+            String locale,
+            Instant scheduledAt,
+            String content) {
+        this(organizationId, appointmentId, channel, templateCode, recipient, locale, scheduledAt, null, content);
     }
 }

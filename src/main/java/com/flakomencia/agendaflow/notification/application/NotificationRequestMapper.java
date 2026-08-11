@@ -5,7 +5,6 @@ import java.util.Locale;
 
 import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationRequest;
 import com.flakomencia.agendaflow.notification.api.model.NotificationRequestValidationResponse;
-import com.flakomencia.agendaflow.notification.domain.NotificationRecipient;
 import com.flakomencia.agendaflow.notification.domain.NotificationRequest;
 import com.flakomencia.agendaflow.notification.domain.NotificationTemplateCode;
 import com.flakomencia.agendaflow.notification.domain.NotificationVariables;
@@ -15,13 +14,19 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class NotificationRequestMapper {
 
+    private final NotificationRecipientNormalizer recipientNormalizer;
+
+    public NotificationRequestMapper(NotificationRecipientNormalizer recipientNormalizer) {
+        this.recipientNormalizer = recipientNormalizer;
+    }
+
     public NotificationRequest toDomain(NotificationRequestValidationRequest request) {
         return new NotificationRequest(
                 request.organizationId(),
                 request.appointmentId(),
                 request.channel(),
                 new NotificationTemplateCode(request.templateCode().trim()),
-                new NotificationRecipient(normalizeRecipient(request.recipient())),
+                recipientNormalizer.normalize(request.recipient()),
                 normalizeLocale(request.locale()),
                 request.scheduledAt(),
                 new NotificationVariables(request.variables()));
@@ -38,16 +43,6 @@ public class NotificationRequestMapper {
                 request.recipient().value(),
                 request.scheduledAt() != null,
                 correlationId);
-    }
-
-    private String normalizeRecipient(String recipient) {
-        String trimmed = recipient.trim();
-        int separator = trimmed.lastIndexOf('@');
-        if (separator <= 0 || separator == trimmed.length() - 1) {
-            throw invalid("INVALID_RECIPIENT", "recipient must be a valid email address", "recipient");
-        }
-        return trimmed.substring(0, separator + 1)
-                + trimmed.substring(separator + 1).toLowerCase(Locale.ROOT);
     }
 
     private String normalizeLocale(String locale) {

@@ -214,7 +214,7 @@ class NotificationContractResourceTest {
     }
 
     @Test
-    void documentsOnlyTheValidationEndpointAsNotificationContract() {
+    void documentsValidationAndDurableIntakeContracts() {
         authorized()
                 .queryParam("format", "json")
                 .when().get("/q/openapi")
@@ -222,7 +222,8 @@ class NotificationContractResourceTest {
                 .statusCode(200)
                 .body("tags.name", hasItem("Notification Contract"))
                 .body("paths.keySet()", hasItem(PATH))
-                .body(not(containsString("/api/v1/notification-requests\"")))
+                .body("paths.keySet()", hasItem("/api/v1/notification-requests"))
+                .body(containsString("Durably accept an appointment notification event"))
                 .body(containsString("does not send, store, enqueue or acknowledge delivery"));
     }
 

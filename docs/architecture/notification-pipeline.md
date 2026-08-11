@@ -1,58 +1,14 @@
-# Notification preparation pipeline
-
-The intended long-term flow is:
+# Notification pipeline
 
 ```text
-authenticated intake
-    ↓
-contract validation
-    ↓
-template lookup
-    ↓
-plain-text rendering
-    ↓
-delivery port
-    ↓
-provider adapter
+Spring Outbox -> authenticated HTTP -> Quarkus Inbox -> claim -> prepare/render -> Mailer -> audit
 ```
 
-Phase 4 implements only contract validation, mapping to an internal immutable model, deterministic
-plain-text rendering, preparation of `RenderedNotification`, and the `NotificationDeliveryPort`
-interface. There is no real intake endpoint, template repository, port implementation, provider
-adapter, persistence, queue, scheduler or retry mechanism.
+The worker reconstructs `AppointmentNotificationEvent`, invokes
+`AppointmentNotificationPreparationService`, and dispatches the resulting plain-text
+`RenderedNotification` through `NotificationDeliveryPort`. The infrastructure adapter uses Quarkus
+Mailer; application and domain code do not depend on Mailer, Hibernate, or Panache.
 
-## Current internal flow
-
-The existing validation endpoint follows this path without rendering content:
-
-```text
-NotificationRequestValidationRequest
-    ↓ Bean Validation
-NotificationRequestMapper
-    ↓ normalization and boundary mapping
-NotificationRequest
-    ↓ defensive contract rules
-ValidatedNotificationRequest
-    ↓ response mapping
-NotificationRequestValidationResponse
-```
-
-`NotificationPreparationService` is an internal, separately tested component. Given a
-`ValidatedNotificationRequest` and caller-supplied synthetic template text, it delegates to the
-renderer and creates a provider-neutral `RenderedNotification`. Nothing invokes a delivery port in
-production.
-
-## Rendering rules
-
-- Exact placeholder syntax: `{{variableName}}`.
-- Variable names follow the existing flat-variable key grammar.
-- Missing variables fail explicitly; unused additional variables are allowed.
-- Rendering is one pass: placeholders contained inside variable values are not evaluated again.
-- Empty, malformed or oversized templates fail.
-- Output above 20,000 characters fails while it is being built.
-- HTML, Markdown-like text and `${expressions}` are ordinary text; no syntax is interpreted beyond
-  the exact placeholder form.
-
-The renderer has no access to reflection, expressions, scripts, files, environment variables,
-network services or arbitrary helpers. It does not log templates, recipients, variables or rendered
-content.
+Every attempt creates a delivery record without persisting subject or rendered body. `DISPATCHED`
+means Quarkus Mailer accepted the SMTP operation; it does not prove arrival in the final mailbox.
+Failures are recorded as `FAILED` with bounded, sanitized technical information.

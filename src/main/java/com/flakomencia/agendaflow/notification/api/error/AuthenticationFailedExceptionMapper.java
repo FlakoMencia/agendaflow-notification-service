@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
@@ -27,12 +28,15 @@ public class AuthenticationFailedExceptionMapper implements ExceptionMapper<Auth
     @Inject
     HttpHeaders httpHeaders;
 
+    @Inject
+    UriInfo uriInfo;
+
     @Override
     public Response toResponse(AuthenticationFailedException exception) {
         LOG.warnf(
                 "Service JWT authentication correlationId=%s subject=unavailable issuer=unavailable result=failed permission=%s",
                 httpHeaders.getHeaderString(CorrelationIdFilter.HEADER_NAME),
-                ServiceTokenClaimsFilter.REQUIRED_PERMISSION);
+                ServiceTokenClaimsFilter.permissionForPath(uriInfo.getPath()));
         return unauthorized();
     }
 

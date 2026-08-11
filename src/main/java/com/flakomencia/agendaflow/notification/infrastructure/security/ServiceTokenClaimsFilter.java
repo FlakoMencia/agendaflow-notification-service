@@ -22,7 +22,9 @@ import jakarta.ws.rs.ext.Provider;
 @ServiceTokenRequired
 @Priority(Priorities.AUTHORIZATION - 100)
 public class ServiceTokenClaimsFilter implements ContainerRequestFilter {
-    public static final String REQUIRED_PERMISSION = "notification:validate";
+    public static final String VALIDATE_PERMISSION = "notification:validate";
+    public static final String SUBMIT_PERMISSION = "notification:submit";
+    public static final String REQUIRED_PERMISSION = VALIDATE_PERMISSION;
     private static final String EXPECTED_SUBJECT = "agendaflow-api";
     private static final Logger LOG = Logger.getLogger(ServiceTokenClaimsFilter.class);
 
@@ -34,6 +36,7 @@ public class ServiceTokenClaimsFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
+        String requiredPermission = permissionForPath(requestContext.getUriInfo().getPath());
         String tokenUse = token.getClaim("token_use");
         if (!"service".equals(tokenUse)) {
             deny(requestContext, "INVALID_TOKEN_USE", "Only service tokens can access this resource", "invalid_token_use");
@@ -47,7 +50,7 @@ public class ServiceTokenClaimsFilter implements ContainerRequestFilter {
         LOG.infof(
                 "Service JWT authorization correlationId=%s subject=%s issuer=%s result=claims_valid permission=%s",
                 requestContext.getHeaderString(CorrelationIdFilter.HEADER_NAME),
-                token.getSubject(), token.getIssuer(), REQUIRED_PERMISSION);
+                token.getSubject(), token.getIssuer(), requiredPermission);
     }
 
     private void deny(
@@ -58,10 +61,15 @@ public class ServiceTokenClaimsFilter implements ContainerRequestFilter {
         LOG.warnf(
                 "Service JWT authorization correlationId=%s subject=%s issuer=%s result=%s permission=%s",
                 requestContext.getHeaderString(CorrelationIdFilter.HEADER_NAME),
-                token.getSubject(), token.getIssuer(), result, REQUIRED_PERMISSION);
+                token.getSubject(), token.getIssuer(), result,
+                permissionForPath(requestContext.getUriInfo().getPath()));
         requestContext.abortWith(Response.status(Response.Status.FORBIDDEN)
                 .type(APPLICATION_JSON_TYPE)
                 .entity(errorFactory.create(Response.Status.FORBIDDEN.getStatusCode(), code, message))
                 .build());
+    }
+
+    public static String permissionForPath(String path) {
+        return path != null && path.endsWith("/validate") ? VALIDATE_PERMISSION : SUBMIT_PERMISSION;
     }
 }

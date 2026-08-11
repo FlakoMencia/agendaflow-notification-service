@@ -1,158 +1,56 @@
 # AgendaFlow Notification Service
 
-Microservicio Quarkus que procesará notificaciones de AgendaFlow en fases posteriores. Actualmente
-valida contratos protegidos por autenticación servicio-a-servicio y dispone de preparación y
-rendering de texto plano exclusivamente internos.
+Quarkus microservice responsible for durable intake, preparation, and technical dispatch of
+AgendaFlow notifications.
 
-## Estado
+## Status
 
-**Fase 4 — Modelo de notificación y preparación de entrega.**
-`POST /api/v1/notification-requests/validate`
-requiere un JWT HS256 emitido por `agendaflow-api`, dirigido a este servicio y autorizado con el
-grupo `notification:validate`.
-
-La validación conserva su contrato externo. Internamente existen records inmutables, mapping desde
-el DTO, un renderer determinista y `NotificationDeliveryPort`, pero no hay implementación del port.
-Nada envía, almacena, encola ni confirma la entrega de notificaciones.
+**Phase 6 - durable Inbox, idempotency and Mailer adapter.** Appointment `CREATED`, `RESCHEDULED`,
+and `CANCELLED` events can now be durably accepted and asynchronously dispatched as plain-text email.
 
 ## Stack
 
-| Componente | Versión |
-| --- | --- |
-| Java | 21 |
-| Maven Wrapper | 3.9.16 |
-| Quarkus | 3.33.3 LTS |
-| REST/JSON | Quarkus REST con Jackson |
-| Validación | Hibernate Validator |
-| Seguridad | SmallRye JWT, HS256 y RBAC |
-| API/health | SmallRye OpenAPI y SmallRye Health |
-| Pruebas | Quarkus Test, JUnit 5 y REST Assured |
+- Java 21, Maven Wrapper 3.9.16 and Quarkus 3.33.3 LTS.
+- Quarkus REST/Jackson, Hibernate ORM, PostgreSQL JDBC, Flyway, Scheduler and Mailer.
+- PostgreSQL 18.4 Testcontainers through Quarkus Dev Services.
+- SmallRye JWT, OpenAPI and Health.
 
-No hay extensiones de persistencia, mensajería, scheduler o proveedores de correo.
-
-## Arquitectura de preparación
-
-```text
-HTTP DTO validado
-    ↓
-NotificationRequestMapper
-    ↓
-NotificationRequest
-    ↓
-NotificationContractValidationService
-    ↓
-ValidatedNotificationRequest
-    ↓ (solo uso interno con template provisto)
-NotificationPreparationService → PlainTextTemplateRenderer → RenderedNotification
-```
-
-El renderer reconoce únicamente `{{variableName}}`. Falla ante variables faltantes, sintaxis
-inválida, templates vacíos o mayores a 10.000 caracteres y resultados mayores a 20.000 caracteres.
-Las variables adicionales se permiten; se ignoran si el template no las usa. Es de una sola pasada,
-por lo que no ejecuta expresiones ni vuelve a interpretar placeholders presentes en valores.
-
-HTML y Markdown no se interpretan: son texto plano. No se usan Qute, Thymeleaf, Freemarker,
-Handlebars, Mustache, reflection, SpEL, JavaScript, archivos ni variables de entorno.
-
-## Requisitos y comandos
-
-Se requiere JDK 21. El servicio usa el puerto `8081` en desarrollo y un puerto automático en
-pruebas.
+## Development
 
 ```cmd
-mvnw.cmd --version
 mvnw.cmd quarkus:dev
 mvnw.cmd clean test
 mvnw.cmd clean verify
 ```
 
-## Configuración JWT
+The service listens on port `8081`. OpenAPI is at `/q/openapi`, Swagger UI at `/q/swagger-ui`, and
+health/readiness at `/q/health` and `/q/health/ready`.
 
-La configuración local/productiva depende de variables externas:
+Database and SMTP variables are documented in `.env.example`. The service owns only the
+`notification_service` schema. Hibernate validates it and Flyway V1 creates its Inbox and delivery
+tables. No table or entity is shared with the Spring API.
 
-```text
-SERVICE_JWT_SECRET=<secreto aleatorio de al menos 32 bytes UTF-8>
-SERVICE_JWT_ISSUER=agendaflow-api
-SERVICE_JWT_AUDIENCE=agendaflow-notification-service
-```
+Mailer is mocked in dev and test, so no external SMTP connection or credentials are required. The
+production profile reads SMTP settings from environment variables and never stores credentials.
 
-`SERVICE_JWT_SECRET` no tiene default productivo. El proceso falla al iniciar si el valor es corto o
-parece un placeholder. `.env.example` contiene solo una indicación no funcional y no existe `.env`
-versionado.
+## Processing semantics
 
-Un token aceptado debe cumplir simultáneamente:
+Authenticated intake returns `202` only after durable persistence. `eventId` is protected by a
+database unique constraint and duplicate requests do not create another inbox or delivery.
+Concurrent workers claim with PostgreSQL `FOR UPDATE SKIP LOCKED`; retries use bounded exponential
+backoff, exhausted events stop retrying, and stale processing claims recover automatically.
 
-- firma HS256 válida;
-- `iss = agendaflow-api`;
-- audiencia `agendaflow-notification-service`;
-- `sub = agendaflow-api`;
-- `token_use = service`;
-- grupo `notification:validate`;
-- claims `sub` y `exp` presentes y token no expirado.
+`DISPATCHED` means the Mailer operation was accepted, not that the recipient's mailbox confirmed
+delivery. Rendered subjects/bodies are not persisted.
 
-Los tokens de usuario se rechazan explícitamente. El servicio no emite tokens ni implementa login.
+See [request contract](docs/api/notification-request-contract.md),
+[durable intake](docs/architecture/durable-intake.md),
+[Inbox/idempotency](docs/architecture/inbox-and-idempotency.md), and
+[pipeline](docs/architecture/notification-pipeline.md).
 
-## Rutas
+## Not implemented
 
-| Ruta | Acceso | Propósito |
-| --- | --- | --- |
-| `POST /api/v1/notification-requests/validate` | JWT de servicio | Validar y normalizar un contrato |
-| `GET /api/v1/system/info` | Público | Información técnica no sensible |
-| `/q/openapi` | Público | Documento OpenAPI |
-| `/q/swagger-ui` | Desarrollo | Swagger UI |
-| `/q/health`, `/q/health/live`, `/q/health/ready` | Público | Salud local del proceso |
-
-Una validación correcta devuelve `200 OK`, nunca `202 Accepted`, y no incluye identificadores de
-request, entrega o proveedor. El contrato completo está en
-[notification-request-contract.md](docs/api/notification-request-contract.md).
-
-La ruta es la publicada por el repositorio desde Fase 2. No existe `/preview`,
-`POST /api/v1/notifications` ni un alias que sugiera intake o envío real.
-
-## Errores, correlación y logs
-
-Los fallos de autenticación devuelven 401 `AUTHENTICATION_REQUIRED`. Los tokens autenticados que no
-son de servicio, tienen subject incorrecto o carecen de autorización devuelven 403
-`INVALID_TOKEN_USE` o `ACCESS_DENIED`.
-
-Todos los errores conservan el formato uniforme y el mismo `X-Correlation-ID` en header y cuerpo.
-Las respuestas no exponen firmas, algoritmos internos, excepciones, stack traces ni secretos. Los
-logs de seguridad se limitan a correlation ID, subject/issuer cuando son confiables, resultado y
-permiso requerido; nunca registran el token.
-
-## Pruebas JWT
-
-El perfil de test usa un secret claramente exclusivo de pruebas y un JWK HMAC equivalente para
-evitar la autogeneración RSA de Quarkus. Cada test genera un JWT efímero durante su ejecución con
-`smallrye-jwt-build`; no existe un token estático de larga duración en el repositorio.
-
-La suite cubre firma, expiración, issuer, audience, subject, `token_use`, grupo RBAC, 401/403,
-correlation ID, OpenAPI, rutas públicas, contrato funcional heredado, mapping, inmutabilidad,
-preparación, límites y rendering seguro.
-
-## Documentación
-
-- [Autenticación servicio-a-servicio](docs/architecture/service-authentication.md)
-- [Límites del servicio](docs/architecture/service-boundaries.md)
-- [Pipeline de preparación](docs/architecture/notification-pipeline.md)
-- [Contrato de validación](docs/api/notification-request-contract.md)
-- [Formato uniforme de errores](docs/api/error-format.md)
-- [Correlation ID](docs/api/correlation-id.md)
-
-## Configuración futura sin implementación
-
-`NOTIFICATION_PROVIDER`, `EMAIL_FROM` y `SPRING_API_BASE_URL` siguen siendo placeholders
-documentales. No inicializan proveedor, sender ni cliente HTTP hacia Spring Boot.
-
-## Repositorios relacionados
-
-- [agendaflow-api](../agendaflow-api)
-- [agendaflow-web](../agendaflow-web)
-
-## No implementado
-
-- Intake real, lookup/almacenamiento de templates, envío de email, attachments o estado de entrega.
-- Kafka, RabbitMQ, Azure Service Bus, consumers, polling, schedulers o retries.
-- PostgreSQL, JDBC, Hibernate, Panache, Flyway, entidades o repositorios.
-- Llamadas a Spring Boot, login, usuarios, refresh token o emisión HTTP de tokens.
-- Docker, nube o CI/CD.
+- HTML, attachments, SMS, WhatsApp, reminders, waitlists, callbacks or administration UI.
+- Kafka, RabbitMQ, Azure Service Bus, Redis or another broker.
+- SendGrid, SES, Azure Communication Services or another provider-specific adapter.
+- Final-mailbox delivery confirmation, Docker/cloud deployment or CI/CD.

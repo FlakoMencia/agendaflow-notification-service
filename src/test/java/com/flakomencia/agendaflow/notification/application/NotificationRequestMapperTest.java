@@ -18,7 +18,8 @@ import com.flakomencia.agendaflow.notification.domain.NotificationRequest;
 
 class NotificationRequestMapperTest {
 
-    private final NotificationRequestMapper mapper = new NotificationRequestMapper();
+    private final NotificationRequestMapper mapper = new NotificationRequestMapper(
+            new NotificationRecipientNormalizer());
 
     @Test
     void mapsAndNormalizesTheHttpDtoIntoTheInternalModel() {

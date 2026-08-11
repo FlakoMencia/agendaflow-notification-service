@@ -12,6 +12,7 @@ import io.quarkus.security.ForbiddenException;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
@@ -28,12 +29,16 @@ public class ForbiddenExceptionMapper implements ExceptionMapper<ForbiddenExcept
     @Inject
     HttpHeaders httpHeaders;
 
+    @Inject
+    UriInfo uriInfo;
+
     @Override
     public Response toResponse(ForbiddenException exception) {
         LOG.warnf(
                 "Service JWT authorization correlationId=%s subject=%s issuer=%s result=access_denied permission=%s",
                 httpHeaders.getHeaderString(CorrelationIdFilter.HEADER_NAME),
-                token.getSubject(), token.getIssuer(), ServiceTokenClaimsFilter.REQUIRED_PERMISSION);
+                token.getSubject(), token.getIssuer(),
+                ServiceTokenClaimsFilter.permissionForPath(uriInfo.getPath()));
         return Response.status(Response.Status.FORBIDDEN)
                 .type(APPLICATION_JSON_TYPE)
                 .entity(errorFactory.create(

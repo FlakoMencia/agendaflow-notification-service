@@ -14,12 +14,18 @@ final class ServiceJwtTestTokens {
     static final String AUDIENCE = "agendaflow-notification-service";
     static final String SUBJECT = "agendaflow-api";
     static final String REQUIRED_GROUP = "notification:validate";
+    static final String SUBMIT_GROUP = "notification:submit";
 
     private ServiceJwtTestTokens() {
     }
 
     static String valid() {
         return token(testSecret(), ISSUER, AUDIENCE, SUBJECT, Set.of(REQUIRED_GROUP), "service",
+                Instant.now().plusSeconds(300));
+    }
+
+    static String submit() {
+        return token(testSecret(), ISSUER, AUDIENCE, SUBJECT, Set.of(SUBMIT_GROUP), "service",
                 Instant.now().plusSeconds(300));
     }
 
